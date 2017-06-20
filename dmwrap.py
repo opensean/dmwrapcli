@@ -1,7 +1,4 @@
-__author__ = 'Sean Landry'
-__date__ = '20june2017'
-__version__ = '0.1.0'
-
+#!/usr/bin/env python3
 """
 usage:
     dmwrap.py create [options] <machine-name>
@@ -37,6 +34,10 @@ options:
                                    in yml format.
 
 """
+__author__ = 'Sean Landry'
+__date__ = '20june2017'
+__version__ = '0.1.0'
+
 
 import subprocess
 from docopt import docopt
