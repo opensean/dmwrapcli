@@ -44,7 +44,7 @@ file.
 passing a userconfig file
 
 ```
-    python2 dmwrap.py create --userconfig defaults.yml my_new_ec2
+    python3 dmwrap.py create --userconfig defaults.yml my_new_ec2
 ```
 
 format of defaults.yml:
