@@ -2,13 +2,13 @@
 --amazonec2-secret-key: None
 --amazonec2-session-token: None
 --amazonec2-ami: None
---amazonec2-region: us-east-1
---amazonec2-vpc-id: vpc-18154b7f
---amazonec2-zone: a
---amazonec2-subnet-id: subnet-d30ed69a
---amazonec2-security-group: docker-machine
---amazonec2-tags: Name,compbio-research-efs-proxy,Owner,sean.landry@cellsignal.com,Department,Computional-Biology-Research
---amazonec2-instance-type: t2.nano
+--amazonec2-region: None
+--amazonec2-vpc-id: None
+--amazonec2-zone: None
+--amazonec2-subnet-id: 
+--amazonec2-security-group: None
+--amazonec2-tags: None
+--amazonec2-instance-type: None
 --amazonec2-device-name: None
 --amazonec2-root-size: None
 --amazonec2-volume-type: None
