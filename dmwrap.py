@@ -1,3 +1,7 @@
+__author__ = 'Sean Landry'
+__date__ = '20june2017'
+__version__ = '0.1.0'
+
 """
 usage:
     dmwrap.py create [options] <machine-name>
