@@ -66,9 +66,9 @@ if __name__== "__main__":
     """
     Command line arguments.
     """
-    options = docopt(__doc__)
-    
+    options = docopt(__doc__)    
     if options['create']:
         opts = parse_opts(options)
+        print(opts)
         args = ["docker-machine", "create"] + opts + [options['<machine-name>']]
         subprocess.run(args)
