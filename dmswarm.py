@@ -1,20 +1,44 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3=
 
-## THIS MODULE IS A WORK IN PROGRESS AND IS NOT FULLY FUNCTIONAL.
-## 
-## STATUS
-## - all nodes launch sucessfully
-## - manager node is intialized successfully
-## - worker nodes are unable to join swarm
-##     - need to include --advertise-addr arg when initializing the manager?
-## 
+## TO DO
+##     - provide default names of machine name are not specified for all nodes
+##     - maybe user should only provide name for manager node and workers are
+##       systematically named?
+##     - add support for additionaly cloud provider drivers, modify doc string 
+##       and pargs_opts func of DMCreateSubprocess to look for '--driver' name
+##       rather than hardcoded 'amazon'
 
 """
 Quickly launch a docker swarm on AWS.
 
+IMPORTANT
+docker-machine creates a default security group that does not have all of 
+the require ports open for docker swarm.  An aws security group with the
+following configuration was tested and worked.
+
+INBOUND
+Type              Protocol  Port Range     Source
+Custom TCP Rule   TCP       2377           0.0.0.0/0
+SSH               TCP       22             0.0.0.0/0
+Custom UDP Rule   UDP       7946           0.0.0.0/0
+Custom TCP Rule   TCP       2376           0.0.0.0/0
+Custom TCP Rule   TCP       7946           0.0.0.0/0
+Custom UDP Rule   UDP       4789           0.0.0.0/0
+
+OUTBOUND
+Type              Protocol  Port Range     Source
+All traffic       All       All            0.0.0.0/0
+
+Currently, this program does not have the ability to change an existing 
+security group.  One can specify a security group with above configuration 
+using the '--amazonec2-security-group AWS_SECURITY_GROUP' arg or create 
+(or modify) a security group named 'docker-machine'.  docker-machine will
+create a security group named 'docker-machine' or use an existing group 
+named 'docker-machine' if the '--amazonec2-security-group AWS_SECURITY_GROUP' 
+arg is omitted.
+
 usage:
     dmwswarm.py create [options] <machine-name>...
-    
     
 options:
     --driver DRIVER    [default: amazonec2]
@@ -218,7 +242,7 @@ class DMInspectSubprocess(DMSubprocessBase):
 
     def private_ip(self, stdout):
         result = json.loads(stdout.decode())
-        return result['Driver']['IPAddress'] 
+        return result['Driver']['PrivateIPAddress'] 
 
 
 
@@ -278,7 +302,7 @@ def main():
                 node = DMCreateSubprocess(optDict = options, 
                                         machine_name = options['<machine-name>'][n],
                                         log_level = log_level)
-                #node.run()
+                node.run()
 
         
 
@@ -314,14 +338,13 @@ def main():
             moduleLogger.info(options['<machine-name>'][n+1] 
                               + " is attempting to join the swarm")
        
+            moduleLogger.debug(token)
+            
             worker = DMSshSubprocess(log_level = log_level,
                                   machine_name = options['<machine-name>'][n +1],
                                   sshArgs = "sudo " + token)
             worker.run()
             
-            moduleLogger.debug(token)
-            moduleLogger.info(options['<machine-name>'][n +1] 
-                              + " successfully joined the swarm.")
 
 if __name__== "__main__":
     
