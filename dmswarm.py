@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
+
+## THIS MODULE IS A WORK IN PROGRESS AND IS NOT FULLY FUNCTIONAL.
+## 
+## STATUS
+## - all nodes launch sucessfully
+## - manager node is intialized successfully
+## - worker nodes are unable to join swarm
+##     - need to include --advertise-addr arg when initializing the manager?
+## 
+
 """
-THIS MODULE IS A WORK IN PROGRESS AND IS NOT FULLY FUNCTIONAL.
-
-STATUS
-- all nodes launch sucessfully
-- manager node is intialized successfully
-- worker nodes are unable to join swarm
-    - need to include --advertise-addr arg when initializing the manager?
-
 Quickly launch a docker swarm on AWS.
 
 usage:
@@ -57,6 +59,7 @@ __version__ = '0.1.0'
 
 import subprocess
 from docopt import docopt
+import json
 import yaml
 import os
 import logging
@@ -197,11 +200,33 @@ class DMCreateSubprocess(DMSubprocessBase):
         return optlst
 
 
+class DMInspectSubprocess(DMSubprocessBase):
+
+    def __init__(self, log_level = "WARNING", dmArg = 'inspect', machine_name = None):
+        """
+        Construct a DMInspectSubprocess object.
+
+        Args:
+            log_level (str): set the logging level to DEBUG, INFO, WARNING,
+                             CRITICAL, or ERROR.
+
+            dmArg (str): the main docker-machine arg, e.g. create
+        """
+        self.logger = self.init_logger(log_level)
+        self.machine_name = machine_name
+        self.argLst = ["docker-machine", dmArg, self.machine_name]
+
+    def private_ip(self, stdout):
+        result = json.loads(stdout.decode())
+        return result['Driver']['IPAddress'] 
+
+
+
 class DMSshSubprocess(DMSubprocessBase):
 
     def __init__(self, log_level = "WARNING", dmArg = 'ssh', sshArgs = None, machine_name = None):
         """
-        Construct a DMCreateSubprocess object.
+        Construct a DMSshSubprocess object.
 
         Args:
             log_level (str): set the logging level to DEBUG, INFO, WARNING,
@@ -253,17 +278,31 @@ def main():
                 node = DMCreateSubprocess(optDict = options, 
                                         machine_name = options['<machine-name>'][n],
                                         log_level = log_level)
-                node.run()
+                #node.run()
+
+        
+
+
+        ## inspect manager node to obtain ip
+        moduleLogger.info('finding manager ip')
+
+        manager = DMInspectSubprocess(log_level = log_level, 
+                                      machine_name = options['<machine-name>'][0])
+        
+        man_proc = manager.run(proc_out = True)
+        stdout, stderr = man_proc.communicate()
+        ip = manager.private_ip(stdout)
+     
+        moduleLogger.debug("manager private ip " + ip)
+
 
         ## initialize manager node
         moduleLogger.info('initializing swarm manager')
 
-        ## need to include --advertise-addr
-        ## use docker-machine inspect machine to retrieve PrivateIp address
-        ## and advertise it
         manager = DMSshSubprocess(log_level = log_level, 
                                   machine_name = options['<machine-name>'][0], 
-                                  sshArgs = "sudo docker swarm init")
+                                  sshArgs = "sudo docker swarm init --advertise-addr " + ip)
+
         man_proc = manager.run(proc_out = True)
         stdout, stderr = man_proc.communicate()
         
