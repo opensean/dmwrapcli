@@ -1,4 +1,4 @@
-#!/usr/bin/env python3=
+#!/usr/bin/env python3
 
 ## TO DO
 ##     - provide default names of machine name are not specified for all nodes
@@ -11,12 +11,12 @@
 """
 Quickly launch a docker swarm on AWS.
 
-IMPORTANT
+Important
 docker-machine creates a default security group that does not have all of 
 the require ports open for docker swarm.  An aws security group with the
 following configuration was tested and worked.
 
-INBOUND
+Inbound
 Type              Protocol  Port Range     Source
 Custom TCP Rule   TCP       2377           0.0.0.0/0
 SSH               TCP       22             0.0.0.0/0
@@ -25,7 +25,7 @@ Custom TCP Rule   TCP       2376           0.0.0.0/0
 Custom TCP Rule   TCP       7946           0.0.0.0/0
 Custom UDP Rule   UDP       4789           0.0.0.0/0
 
-OUTBOUND
+Outbound
 Type              Protocol  Port Range     Source
 All traffic       All       All            0.0.0.0/0
 
@@ -36,6 +36,7 @@ using the '--amazonec2-security-group AWS_SECURITY_GROUP' arg or create
 create a security group named 'docker-machine' or use an existing group 
 named 'docker-machine' if the '--amazonec2-security-group AWS_SECURITY_GROUP' 
 arg is omitted.
+
 
 usage:
     dmwswarm.py create [options] <machine-name>...
