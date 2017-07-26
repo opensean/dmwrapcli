@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 
 ## TO DO
-##     - provide default names of machine name are not specified for all nodes
-##     - maybe user should only provide name for manager node and workers are
-##       systematically named?
-##     - add support for additionaly cloud provider drivers, modify doc string 
-##       and pargs_opts func of DMCreateSubprocess to look for '--driver' name
-##       rather than hardcoded 'amazon'
+##     - add support for additional cloud provider drivers 
+##     - add option to scp copy directories or files to the manager such
+##       as aws credentials
 
 """
 Quickly launch a docker swarm on AWS.
@@ -39,7 +36,7 @@ arg is omitted.
 
 
 usage:
-    dmwswarm.py create [options] <machine-name>...
+    dmwswarm.py create [options] <swarm-name>
     
 options:
     --driver DRIVER    [default: amazonec2]
@@ -175,14 +172,14 @@ class DMSubprocessBase():
                                     stderr = subprocess.STDOUT,
                                     stdin = subprocess.PIPE)
         else:
-            proc = subprocess.Popen(self.argLst, stdout = subprocess.PIPE,
-                                    stderr = subprocess.STDOUT)
-
+             proc = subprocess.Popen(self.argLst, stdout = subprocess.PIPE,
+                                     stderr = subprocess.STDOUT)
+ 
         if not proc_out:
-            for line in proc.stdout:
-                self.logger.info(line.decode().strip())
+             for line in proc.stdout:
+                 self.logger.info(line.decode().strip())
         else:
-            return proc
+             return proc
 
 
 class DMCreateSubprocess(DMSubprocessBase):
@@ -214,14 +211,16 @@ class DMCreateSubprocess(DMSubprocessBase):
             with open(userconfig, 'r') as user:
                 config = yaml.load(user)
                 for k,v in config.items():
-                    if v != 'None' and ('amazon' in k or 'driver' in k):
+                    if v != 'None' and (opts['--driver'] in k or 'driver' in k):
                         optlst.append(k)
                         optlst.append(v)
     
         for k,v in opts.items():
-            if k not in optlst and '--' in k and v and ('amazon' in k or 'driver' in k):
+            if k not in optlst and '--' in k and v and (opts['--driver'] in k or 'driver' in k):
                 optlst.append(k)
                 optlst.append(v)
+
+        self.logger.debug("parse_opts --> " + str(optlst))
         return optlst
 
 
@@ -299,10 +298,19 @@ def main():
         ## launch the swarm nodes
         if options['--node-count']:
             for n in range(int(options['--node-count'])):
-                moduleLogger.info("creating " + options['<machine-name>'][n])
-                node = DMCreateSubprocess(optDict = options, 
-                                        machine_name = options['<machine-name>'][n],
-                                        log_level = log_level)
+                if n == 0:
+                    moduleLogger.info("creating " + options['<swarm-name>'] + "-manager")
+                    node = DMCreateSubprocess(optDict = options, 
+                                machine_name = options['<swarm-name>'] +"-manager",
+                                log_level = log_level) 
+                else:
+                    moduleLogger.info("creating " + options['<swarm-name>'] + "-worker-" 
+                                      + str(n))
+
+                    node = DMCreateSubprocess(optDict = options,
+                                 machine_name = options['<swarm-name>'] +"-worker-" + str(n),
+                                 log_level = log_level)
+
                 node.run()
 
         
@@ -312,7 +320,7 @@ def main():
         moduleLogger.info('finding manager ip')
 
         manager = DMInspectSubprocess(log_level = log_level, 
-                                      machine_name = options['<machine-name>'][0])
+                           machine_name = options['<swarm-name>'] + "-manager")
         
         man_proc = manager.run(proc_out = True)
         stdout, stderr = man_proc.communicate()
@@ -325,8 +333,8 @@ def main():
         moduleLogger.info('initializing swarm manager')
 
         manager = DMSshSubprocess(log_level = log_level, 
-                                  machine_name = options['<machine-name>'][0], 
-                                  sshArgs = "sudo docker swarm init --advertise-addr " + ip)
+                       machine_name = options['<swarm-name>'] + "-manager", 
+                       sshArgs = "sudo docker swarm init --advertise-addr " + ip)
 
         man_proc = manager.run(proc_out = True)
         stdout, stderr = man_proc.communicate()
@@ -336,14 +344,15 @@ def main():
 
         ## add workers to the swarm
         for n in range(int(options['--node-count']) - 1):
-            moduleLogger.info(options['<machine-name>'][n+1] 
+            moduleLogger.info(options['<swarm-name>'] + "-worker-" + str(n+1) 
                               + " is attempting to join the swarm")
        
             moduleLogger.debug(token)
             
             worker = DMSshSubprocess(log_level = log_level,
-                                  machine_name = options['<machine-name>'][n +1],
-                                  sshArgs = "sudo " + token)
+                          machine_name = options['<swarm-name>'] + "-worker-" 
+                                                 + str(n+1),
+                          sshArgs = "sudo " + token)
             worker.run()
             
 
