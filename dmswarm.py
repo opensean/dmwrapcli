@@ -68,7 +68,7 @@ options:
     --log-level LOG             Set the log level to DEBUG, INFO, WARNING, 
                                 CRITICAL, or ERROR [default: DEBUG].
 
-    --node-count NODE           Number of worker nodes.
+    --nodes NODES               Number of worker nodes.
 
     --userconfig USERCONFIG     Path to user config file with above options 
                                 in yml format.
@@ -87,16 +87,16 @@ import os
 import logging
 import sys
 
-class DMSubprocessBase():
+class DMSubprocess():
     """
     Serves as the base class for all docker-machine subprocess calls.
 
     """
 
-    def __init__(self, log_level = "WARNING", dmArg = None, optDict = None, 
-                 machine_name = None):
+    def __init__(self, log_level = "INFO", action = None, optDict = None, 
+                 machine_name = None, sshArgs = None):
         """
-        Construct a DMSubprocessBase object.
+        Construct a DMSubprocess object.
         
         Args:
         log_level (str): set the logging level to DEBUG, INFO, WARNING, 
@@ -105,24 +105,21 @@ class DMSubprocessBase():
         optDict (dict): a dictionary of options to be passed to the 
                         docker-machine subprocess call.
         
-        dmArg (str): the main docker-machine arg, e.g. create
+        action (str): the main docker-machine arg, e.g. create
         
         """
         self.logger = self.init_logger(log_level)
-        self.options = optDict
-        self.argLst = ["docker-machine"] + [dmArg] + self.options + [self.machine_name]
+        self.options = self.parse_opts(optDict)
+        self.machine_name = machine_name
+        self.action = action
+        self.sshArgs = sshArgs
+        self.stdout = ''
+        self.stderr = ''
+        self.argLst = self.dm_action(action)
 
     def init_logger(self, log_level = "WARNING"):
         """
         Initialize the class logger.
-
-        This method will change the root logger level if not equal to the 
-        log_level arg, which is necessary if working with this class in 
-        an ipython session. The logging library uses a hierarchy structure 
-        meaning child loggers will pass args to parent first, the root 
-        loggers default level is 30 (logging.WARNING).  Therefore, need to 
-        set root logger to log arg level to allow child logger a chance to 
-        handle logging output
 
         Args:
             log_level (str): set logging level to DEBUG, INFO, WARNING, 
@@ -135,73 +132,21 @@ class DMSubprocessBase():
         numeric_level = getattr(logging, log_level.upper(), None)
         if not isinstance(numeric_level, int):
             raise ValueError('Invalid log level: %s' % log_level)
-        rootLogger = logging.getLogger()
+        
         class_logger = logging.getLogger(self.__class__.__name__)
-
-        ## change root logger level if not equal to log arg 
-        if rootLogger.level != numeric_level:
-            logging.basicConfig(level = numeric_level)
+        class_logger.setLevel(numeric_level)
 
         class_logger.debug('logger initialized')
         return class_logger
 
-    def run(self, proc_in = False, proc_out = False):
-        """
-        Run the subprocess.
-
-        Args:
-            proc_in (boolean): Set to True of subprocess call will be 
-                               expecting the stdout PIPE of another 
-                               subprocess call.
-
-            proc_out (boolean): if proc_out is set to True return the 
-                                subprocess object.  If proc_out is set 
-                                to False the stdout and stderr are 
-                                sent to the class logger.
-
-        Returns:
-            proc (subprocess obj): if proc_out is set to True return the 
-                                   subprocess object.  If proc_out is set 
-                                   to False the stdout and stderr are 
-                                   sent to the class logger.
-        """
-        self.logger.info("running subprocess")
-        self.logger.debug("using args --> " + str(self.argLst))
-        if proc_in:
-            proc = subprocess.Popen(self.argLst, stdout = subprocess.PIPE,
-                                    stderr = subprocess.STDOUT,
-                                    stdin = subprocess.PIPE)
-        else:
-             proc = subprocess.Popen(self.argLst, stdout = subprocess.PIPE,
-                                     stderr = subprocess.STDOUT)
- 
-        if not proc_out:
-             for line in proc.stdout:
-                 self.logger.info(line.decode().strip())
-        else:
-             return proc
-
-
-class DMCreateSubprocess(DMSubprocessBase):
-
-    def __init__(self, log_level = "WARNING", dmArg = 'create', optDict = None, 
-                 machine_name = None):
-        """
-        Construct a DMCreateSubprocess object.
-
-        Args:
-            log_level (str): set the logging level to DEBUG, INFO, WARNING, 
-                             CRITICAL, or ERROR.
-
-            optDict (dict): a dictionary of options to be passed to the 
-                            docker-machine subprocess call.
-            
-            dmArg (str): the main docker-machine arg, e.g. create
-        """
-        self.logger = self.init_logger(log_level)
-        self.machine_name = machine_name
-        self.options = self.parse_opts(opts = optDict)
-        self.argLst = ["docker-machine"] + [dmArg] + self.options + [self.machine_name]
+    def dm_action(self, action):
+        all_actions = {
+            'ssh':["docker-machine", action, self.machine_name, self.sshArgs],
+            'create':["docker-machine"] + [action] + self.options + [self.machine_name],
+            'inspect':["docker-machine", action, self.machine_name]
+            }
+        
+        return all_actions[action]
 
     def parse_opts(self, opts = None):
         optlst = []
@@ -223,49 +168,49 @@ class DMCreateSubprocess(DMSubprocessBase):
         self.logger.debug("parse_opts --> " + str(optlst))
         return optlst
 
-
-class DMInspectSubprocess(DMSubprocessBase):
-
-    def __init__(self, log_level = "WARNING", dmArg = 'inspect', machine_name = None):
-        """
-        Construct a DMInspectSubprocess object.
-
-        Args:
-            log_level (str): set the logging level to DEBUG, INFO, WARNING,
-                             CRITICAL, or ERROR.
-
-            dmArg (str): the main docker-machine arg, e.g. create
-        """
-        self.logger = self.init_logger(log_level)
-        self.machine_name = machine_name
-        self.argLst = ["docker-machine", dmArg, self.machine_name]
-
     def private_ip(self, stdout):
         result = json.loads(stdout.decode())
         return result['Driver']['PrivateIPAddress'] 
-
-
-
-class DMSshSubprocess(DMSubprocessBase):
-
-    def __init__(self, log_level = "WARNING", dmArg = 'ssh', sshArgs = None, machine_name = None):
-        """
-        Construct a DMSshSubprocess object.
-
-        Args:
-            log_level (str): set the logging level to DEBUG, INFO, WARNING,
-                             CRITICAL, or ERROR.
-
-            dmArg (str): the main docker-machine arg, e.g. create
-        """
-        self.logger = self.init_logger(log_level)
-        self.machine_name = machine_name
-        self.argLst = ["docker-machine", dmArg, self.machine_name, sshArgs]
 
     def parse_token(self, stdout):
         for line in stdout.decode().split('\n'):
             if 'docker swarm join --token' in line:
                 return line.strip()
+
+    def log_streams(self, stdout = False, stderr = True):
+        self.logger.info("finished subprocess, stream logs:")
+        if stdout and self.stdout:
+            self.logger.info("stdout: \n" + self.stdout.decode())
+        if stderr and self.stderr:
+            self.logger.info("stderr: \n" + self.stderr.decode())
+
+    def run(self, proc_in = None):
+        """
+        Run the subprocess.
+
+        Args:
+            proc_in (boolean):         Set to True of subprocess call will be 
+                                       expecting the stdout PIPE of another 
+                                       subprocess call.
+
+        """
+        
+        self.logger.info("running subprocess")
+        self.logger.info("using args --> " + str(self.argLst))
+
+        if proc_in:
+            proc = subprocess.Popen(self.argLst, stdout = subprocess.PIPE,
+                                    stderr = subprocess.PIPE,
+                                    stdin = subprocess.PIPE)
+            self.stdout, self.stderr = proc.communicate(input = proc_in)
+
+        else:
+            proc = subprocess.Popen(self.argLst, stdout = subprocess.PIPE,
+                                    stderr = subprocess.PIPE)
+
+            self.stdout,self.stderr = proc.communicate()
+
+
 
 def main():
     """
@@ -296,35 +241,43 @@ def main():
     if options['create']:
         
         ## launch the swarm nodes
-        if options['--node-count']:
-            for n in range(int(options['--node-count'])):
+        if options['--nodes']:
+            for n in range(int(options['--nodes'])):
                 if n == 0:
                     moduleLogger.info("creating " + options['<swarm-name>'] + "-manager")
-                    node = DMCreateSubprocess(optDict = options, 
+                    node = DMSubprocess(
+                                action = 'create',
+                                optDict = options, 
                                 machine_name = options['<swarm-name>'] +"-manager",
-                                log_level = log_level) 
+                                log_level = log_level)
+
                 else:
                     moduleLogger.info("creating " + options['<swarm-name>'] + "-worker-" 
                                       + str(n))
 
-                    node = DMCreateSubprocess(optDict = options,
+                    node = DMSubprocess(
+                                 action = 'create',
+                                 optDict = options,
                                  machine_name = options['<swarm-name>'] +"-worker-" + str(n),
                                  log_level = log_level)
 
                 node.run()
-
+                node.log_streams(stdout = True)
         
 
 
         ## inspect manager node to obtain ip
         moduleLogger.info('finding manager ip')
 
-        manager = DMInspectSubprocess(log_level = log_level, 
+        manager = DMSubprocess(
+                           action = 'inspect',
+                           optDict = options,
+                           log_level = log_level, 
                            machine_name = options['<swarm-name>'] + "-manager")
         
-        man_proc = manager.run(proc_out = True)
-        stdout, stderr = man_proc.communicate()
-        ip = manager.private_ip(stdout)
+        manager.run()
+        manager.log_streams(stdout = True)
+        ip = manager.private_ip(manager.stdout)
      
         moduleLogger.debug("manager private ip " + ip)
 
@@ -332,29 +285,34 @@ def main():
         ## initialize manager node
         moduleLogger.info('initializing swarm manager')
 
-        manager = DMSshSubprocess(log_level = log_level, 
+        manager = DMSubprocess(
+                       action = 'ssh',
+                       optDict = options,
+                       log_level = log_level, 
                        machine_name = options['<swarm-name>'] + "-manager", 
                        sshArgs = "sudo docker swarm init --advertise-addr " + ip)
 
-        man_proc = manager.run(proc_out = True)
-        stdout, stderr = man_proc.communicate()
-        
-        token = manager.parse_token(stdout)
+        manager.run()
+        manager.log_streams(stdout = True) 
+        token = manager.parse_token(manager.stdout)
         moduleLogger.debug(token)
 
         ## add workers to the swarm
-        for n in range(int(options['--node-count']) - 1):
+        for n in range(int(options['--nodes']) - 1):
             moduleLogger.info(options['<swarm-name>'] + "-worker-" + str(n+1) 
                               + " is attempting to join the swarm")
        
             moduleLogger.debug(token)
             
-            worker = DMSshSubprocess(log_level = log_level,
+            worker = DMSubprocess(
+                          action = 'ssh',
+                          optDict = options,
+                          log_level = log_level,
                           machine_name = options['<swarm-name>'] + "-worker-" 
                                                  + str(n+1),
                           sshArgs = "sudo " + token)
             worker.run()
-            
+            worker.log_streams(stdout = True)
 
 if __name__== "__main__":
     
